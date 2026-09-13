@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Chuyển đổi Tọa độ Việt Nam — HN-72 · VN-2000 · WGS-84</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#f0f2f5;--surface:#fff;--surface2:#f8f9fb;
+  --border:#e2e6ec;--border2:#d0d7e2;
+  --text:#1a1d23;--text2:#4a5568;--text3:#8a96a8;
+  --accent:#1a73e8;--accent2:#1557b0;
+  --red:#e53935;--gold:#f59e0b;--green:#0f9d58;
+  --hn:#7c3aed;--vn:#d97706;--wg:#0f9d58;
+  --sh:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);
+  --sh2:0 2px 8px rgba(0,0,0,.12),0 8px 32px rgba(0,0,0,.08);
+}
+html{font-size:16px;}
+body{font-family:'Lexend',sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 0 60px;}
+.topbar{width:100%;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;display:flex;align-items:center;height:60px;gap:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.tf{height:3px;border-radius:2px;}
+.tf1,.tf3,.tf5{width:18px;background:var(--red);}
+.tf2,.tf4{width:12px;background:var(--gold);}
+.topbar-flag{display:flex;gap:3px;align-items:center;}
+.topbar-title{font-size:17px;font-weight:600;letter-spacing:-.4px;}
+.topbar-title span{color:var(--accent);}
+.topbar-sub{font-size:11px;color:var(--text3);font-weight:400;margin-left:4px;}
+.page{width:80%;max-width:1400px;padding:28px 24px 0;}
+.translator{background:var(--surface);border-radius:16px;box-shadow:var(--sh2);
+  overflow:hidden;border:1px solid var(--border);}
+.sys-bar{display:grid;grid-template-columns:1fr 56px 1fr;
+  border-bottom:1px solid var(--border);background:var(--surface2);}
+.sys-panel{display:flex;align-items:stretch;}
+.sys-btn{flex:1;padding:14px 8px;background:transparent;border:none;
+  border-bottom:3px solid transparent;font-family:'Lexend',sans-serif;
+  font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;
+  transition:all .18s;white-space:nowrap;letter-spacing:-.2px;}
+.sys-btn:hover{color:var(--text);background:rgba(0,0,0,.03);}
+.sys-btn.active{color:var(--text);font-weight:600;border-bottom-color:var(--accent);background:var(--surface);}
+.sys-btn.active[data-sys="hn72"]{border-bottom-color:var(--hn);color:var(--hn);}
+.sys-btn.active[data-sys="vn2000"]{border-bottom-color:var(--vn);color:var(--vn);}
+.sys-btn.active[data-sys="wgs84"]{border-bottom-color:var(--wg);color:var(--wg);}
+.swap-col{display:flex;align-items:center;justify-content:center;
+  border-left:1px solid var(--border);border-right:1px solid var(--border);padding:8px;}
+.swap-btn{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--border2);
+  background:var(--surface);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:18px;transition:all .2s;
+  box-shadow:0 1px 4px rgba(0,0,0,.08);color:var(--text2);}
+.swap-btn:hover{background:var(--accent);border-color:var(--accent);color:white;
+  box-shadow:0 2px 8px rgba(26,115,232,.3);transform:rotate(180deg);}
+.panels{display:grid;grid-template-columns:1fr 1fr;}
+.panel{padding:20px 22px 22px;display:flex;flex-direction:column;gap:13px;min-height:360px;}
+.panel-left{border-right:1px solid var(--border);}
+.zone-badge{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;
+  font-size:11.5px;font-weight:500;color:var(--text2);background:var(--surface2);
+  border:1px solid var(--border);min-height:36px;flex-wrap:wrap;line-height:1.5;}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-hn{background:var(--hn);}.dot-vn{background:var(--vn);}.dot-wg{background:var(--wg);}
+.sel-wrap{display:flex;flex-direction:column;gap:5px;}
+.sel-label{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+select.psel{width:100%;background:var(--surface);border:1px solid var(--border2);
+  border-radius:8px;color:var(--text);font-family:'Lexend',sans-serif;font-size:12px;
+  padding:8px 12px;outline:none;cursor:pointer;transition:border-color .18s,box-shadow .18s;appearance:auto;}
+select.psel:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,115,232,.1);}
+.sel-hint{font-size:11px;color:var(--text3);margin-top:4px;line-height:1.55;padding:0 2px;}
+.sel-hint strong{color:var(--text2);}
+.inp-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.inp-field{display:flex;flex-direction:column;gap:5px;}
+.inp-label{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+input.cinp{width:100%;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:'JetBrains Mono',monospace;
+  font-size:13px;padding:10px 12px;outline:none;
+  transition:border-color .18s,box-shadow .18s;}
+input.cinp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,115,232,.12);background:var(--surface);}
+input.cinp::placeholder{color:var(--text3);font-weight:300;}
+.cvt-btn{width:100%;padding:12px;background:var(--accent);color:white;border:none;
+  border-radius:10px;font-family:'Lexend',sans-serif;font-size:14px;font-weight:600;
+  cursor:pointer;transition:background .18s,transform .1s,box-shadow .18s;
+  letter-spacing:-.2px;box-shadow:0 2px 8px rgba(26,115,232,.25);}
+.cvt-btn:hover{background:var(--accent2);box-shadow:0 4px 14px rgba(26,115,232,.35);}
+.cvt-btn:active{transform:scale(.98);}
+.msg{font-size:12.5px;padding:9px 13px;border-radius:8px;line-height:1.5;}
+.msg-err{color:var(--red);background:#fef2f2;border:1px solid #fecaca;}
+.msg-warn{color:#92400e;background:#fffbeb;border:1px solid #fde68a;}
+.result-area{display:flex;flex-direction:column;gap:13px;}
+.result-ph{flex:1;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;color:var(--text3);font-size:13px;padding:30px 0;}
+.result-ph .icon{font-size:36px;opacity:.4;}
+.result-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.rbox{padding:12px 14px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
+.rbox-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.rlabel{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.copy-btn{font-size:11px;color:var(--text3);background:transparent;border:none;cursor:pointer;
+  padding:2px 8px;border-radius:5px;font-family:'Lexend',sans-serif;font-weight:500;transition:all .15s;}
+.copy-btn:hover{background:var(--border);color:var(--accent);}
+.copy-btn.ok{color:var(--wg);}
+.rval{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+  color:var(--text);letter-spacing:-.3px;line-height:1.3;}
+.rval.c-hn{color:var(--hn);}.rval.c-vn{color:var(--vn);}.rval.c-wg{color:var(--wg);}
+.rdms{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px;}
+.rnote{font-size:11px;color:var(--text3);padding:4px 2px;}
+.map-wrap{border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:10px;}
+.map-open{display:block;width:100%;padding:10px;background:transparent;
+  border:1.5px solid var(--wg);border-radius:9px;color:var(--wg);
+  font-family:'Lexend',sans-serif;font-size:13px;font-weight:600;
+  text-align:center;text-decoration:none;cursor:pointer;transition:all .18s;}
+.map-open:hover{background:var(--wg);color:white;}
+.info-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;}
+.icard{background:var(--surface);border-radius:12px;border:1px solid var(--border);
+  padding:16px;box-shadow:var(--sh);}
+.icard-title{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+.badge{font-size:9px;padding:2px 7px;border-radius:4px;
+  font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.5px;}
+.bdg-hn{background:#ede9fe;color:var(--hn);}
+.bdg-vn{background:#fef3c7;color:var(--vn);}
+.bdg-wg{background:#d1fae5;color:var(--wg);}
+.icard-body{font-size:12px;color:var(--text2);line-height:1.6;}
+.hidden{display:none!important;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.anim{animation:fadeIn .25s ease both;}
+@media(max-width:900px){
+  .page{width:92%;padding:16px 12px 0;}
+}
+@media(max-width:640px){
+  .page{width:98%;padding:10px 6px 0;}
+  .panels{grid-template-columns:1fr;}
+  .panel-left{border-right:none;border-bottom:1px solid var(--border);}
+  .panel{padding:14px 14px 18px;gap:10px;min-height:unset;}
+  .sys-bar{grid-template-columns:1fr 40px 1fr;}
+  .sys-btn{font-size:10px;padding:10px 2px;}
+  .info-strip,.result-row-2,.inp-row{grid-template-columns:1fr;}
+  .cinp{font-size:15px;padding:10px 10px;min-height:44px;}
+  .btn-convert{font-size:14px;padding:12px 16px;}
+  .btn-add-pt{font-size:12px;padding:8px 12px;}
+  .inp-table-head,.pt-row{font-size:12px;}
+  .topbar{padding:0 12px;}
+  .topb-inner{flex-wrap:wrap;gap:6px;}
+  .res-label{font-size:11px;}
+  .res-val{font-size:15px;}
+  .map-open{font-size:12px;}
+  #polyline-map{height:260px;}
+  .translator{border-radius:10px;}
+}
+
+/* ── MULTI-POINT TABLE INPUT ── */
+.inp-table-head { display:grid; grid-template-columns:38px 1fr 1fr 28px; gap:6px;
+  padding:0 0 6px 0; border-bottom:2px solid var(--border2); margin-bottom:8px; }
+.inp-th { font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+  color:var(--text3); }
+.inp-th:first-child { text-align:center; }
+.inp-table-body { display:flex; flex-direction:column; gap:6px; }
+.pt-row { display:grid; grid-template-columns:38px 1fr 1fr 28px; gap:6px; align-items:center; }
+.pt-num { font-size:12px; font-weight:700; color:var(--text2); text-align:center; }
+.pt-del { width:26px; height:26px; border-radius:50%; border:1.5px solid var(--border2);
+  background:transparent; color:var(--text3); font-size:13px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s; padding:0; flex-shrink:0; }
+.pt-del:hover { background:var(--red); border-color:var(--red); color:white; }
+.pt-del-ph { width:26px; flex-shrink:0; }
+.inputs-wrap { display:flex; flex-direction:column; gap:0; }
+.pt-add-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 18px;
+  background:var(--gold); border:none; border-radius:8px; color:white;
+  font-family:'Lexend',sans-serif; font-size:12px; font-weight:600;
+  cursor:pointer; transition:all .18s;
+  box-shadow:0 2px 6px rgba(245,158,11,.3); }
+.pt-add-btn:hover { background:#d97706; box-shadow:0 3px 10px rgba(245,158,11,.4); transform:translateY(-1px); }
+/* Result table */
+.res-pt-wrap { display:flex; flex-direction:column; gap:10px; }
+.res-pt-row { display:flex; align-items:flex-start; gap:8px; }
+.res-pt-num { font-size:10px; font-weight:700; color:var(--text3); min-width:16px;
+  padding-top:14px; letter-spacing:.5px; }
+.res-pt-fields { flex:1; }
+.res-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.rnote-sm { font-size:10.5px; color:var(--text3); padding:3px 2px; }
+
+/* ── POLYLINE OPTION ── */
+.polyline-opt { display:flex; align-items:center; gap:8px; padding:8px 12px;
+  background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+  margin-bottom:4px; cursor:pointer; user-select:none; }
+.polyline-opt input[type=checkbox] { width:15px; height:15px; accent-color:var(--gold);
+  cursor:pointer; flex-shrink:0; }
+.polyline-opt label { font-size:12px; font-weight:500; color:var(--text2);
+  cursor:pointer; line-height:1.4; }
+.polyline-opt label span { color:var(--gold); font-weight:700; }
+.map-canvas-wrap { border-radius:10px; overflow:hidden; border:1px solid var(--border);
+  margin-bottom:10px; background:#e8eaed; }
+
+/* ── LEAFLET MAP ── */
+.leaflet-map-wrap { border-radius:10px; overflow:hidden;
+  border:1px solid var(--border); margin-bottom:10px; }
+#polyline-map { height:320px; width:100%; background:#1a1a2e; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-flag">
+    <div class="tf tf1"></div><div class="tf tf2"></div>
+    <div class="tf tf3"></div><div class="tf tf4"></div>
+    <div class="tf tf5"></div>
+  </div>
+  <div class="topbar-title">
+    Chuyển đổi Tọa độ <span>Việt Nam</span>
+    <span class="topbar-sub">HN-72 · VN-2000 · WGS-84</span>
+  </div>
+</header>
+
+<div class="page">
+<div class="translator">
+
+  <div class="sys-bar">
+    <div class="sys-panel" id="left-sys-panel">
+      <button class="sys-btn" data-sys="hn72"   onclick="selectSys('left','hn72')">HN-72</button>
+      <button class="sys-btn active" data-sys="vn2000" onclick="selectSys('left','vn2000')">VN-2000</button>
+      <button class="sys-btn" data-sys="wgs84"  onclick="selectSys('left','wgs84')">WGS-84</button>
+    </div>
+    <div class="swap-col">
+      <button class="swap-btn" onclick="swapSystems()" title="Đảo ngược">&#x21C4;</button>
+    </div>
+    <div class="sys-panel" id="right-sys-panel">
+      <button class="sys-btn" data-sys="hn72"   onclick="selectSys('right','hn72')">HN-72</button>
+      <button class="sys-btn" data-sys="vn2000" onclick="selectSys('right','vn2000')">VN-2000</button>
+      <button class="sys-btn active" data-sys="wgs84"  onclick="selectSys('right','wgs84')">WGS-84</button>
+    </div>
+  </div>
+
+  <div class="panels">
+
+    <!-- LEFT: INPUT -->
+    <div class="panel panel-left">
+      <div class="zone-badge" id="left-badge">
+        <span class="dot dot-vn"></span>
+        <span id="left-badge-text">VN-2000 · Hệ tọa độ địa chính Việt Nam hiện hành</span>
+      </div>
+
+      <!-- VN-2000 province -->
+      <div class="sel-wrap" id="left-vn-wrap">
+        <div class="sel-label">Tỉnh / Thành phố</div>
+        <select class="psel" id="left-vn-prov" onchange="syncZones('left-vn');clearResult()">
+          <optgroup label="── Miền Bắc (EPSG toàn quốc) ──">
+            <option value="106.00|ep">Bắc Giang (106°00′)</option>
+            <option value="106.50|ep">Bắc Kạn (106°30′)</option>
+            <option value="106.00|ep">Bắc Ninh (106°00′)</option>
+            <option value="106.50|ep">Cao Bằng (106°30′)</option>
+            <option value="104.00|ep">Điện Biên (104°00′)</option>
+            <option value="105.50|ep">Hà Giang (105°30′)</option>
+            <option value="105.75|ep">Hà Nam (105°45′)</option>
+            <option value="105.75|ep">Hà Nội (105°45′)</option>
+            <option value="106.00|ep">Hải Dương (106°00′)</option>
+            <option value="106.00|ep">Hải Phòng (106°00′)</option>
+            <option value="106.25|ep">Hòa Bình (106°15′)</option>
+            <option value="106.00|ep">Hưng Yên (106°00′)</option>
+            <option value="103.25|ep">Lai Châu (103°15′)</option>
+            <option value="107.75|ep">Lạng Sơn (107°45′)</option>
+            <option value="104.50|ep">Lào Cai (104°30′)</option>
+            <option value="105.75|ep">Nam Định (105°45′)</option>
+            <option value="105.75|ep">Ninh Bình (105°45′)</option>
+            <option value="105.75|ep">Phú Thọ (105°45′)</option>
+            <option value="107.50|ep">Quảng Ninh (107°30′)</option>
+            <option value="104.00|ep">Sơn La (104°00′)</option>
+            <option value="106.00|ep">Thái Bình (106°00′)</option>
+            <option value="106.00|ep">Thái Nguyên (106°00′)</option>
+            <option value="105.75|ep">Thanh Hóa (105°45′)</option>
+            <option value="105.50|ep">Tuyên Quang (105°30′)</option>
+            <option value="104.75|ep">Vĩnh Phúc (104°45′)</option>
+            <option value="104.50|ep">Yên Bái (104°30′)</option>
+          </optgroup>
+          <optgroup label="── Miền Trung (EPSG toàn quốc) ──">
+            <option value="107.75|ep">Bình Định (107°45′)</option>
+            <option value="107.75|ep">Đà Nẵng (107°45′)</option>
+            <option value="107.75|ep">Đắk Lắk (107°45′)</option>
+            <option value="107.75|ep">Đắk Nông (107°45′)</option>
+            <option value="107.75|ep">Gia Lai (107°45′)</option>
+            <option value="105.75|ep">Hà Tĩnh (105°45′)</option>
+            <option value="107.75|ep">Khánh Hòa (107°45′)</option>
+            <option value="107.75|ep">Kon Tum (107°45′)</option>
+            <option value="105.75|ep">Nghệ An (105°45′)</option>
+            <option value="107.75|ep">Ninh Thuận (107°45′)</option>
+            <option value="107.75|ep">Phú Yên (107°45′)</option>
+            <option value="106.25|ep">Quảng Bình (106°15′)</option>
+            <option value="107.75|ep">Quảng Nam (107°45′)</option>
+            <option value="107.75|ep">Quảng Ngãi (107°45′)</option>
+            <option value="107.00|ep">Quảng Trị (107°00′)</option>
+            <option value="107.00|ep">Thừa Thiên Huế (107°00′)</option>
+          </optgroup>
+          <optgroup label="── Miền Nam (Bộ tham số Bách Khoa 2010) ──">
+            <option value="104.75|bk">An Giang (104°45′)</option>
+            <option value="107.75|bk">Bà Rịa - Vũng Tàu (107°45′)</option>
+            <option value="105.00|bk">Bạc Liêu (105°00′)</option>
+            <option value="105.75|bk">Bến Tre (105°45′)</option>
+            <option value="106.50|bk">Bình Dương (106°30′)</option>
+            <option value="106.25|bk">Bình Phước (106°15′)</option>
+            <option value="107.75|bk">Bình Thuận (107°45′)</option>
+            <option value="105.00|bk">Cà Mau (105°00′)</option>
+            <option value="105.75|bk">Cần Thơ (105°45′)</option>
+            <option value="107.75|bk">Đồng Nai (107°45′)</option>
+            <option value="105.75|bk">Đồng Tháp (105°45′)</option>
+            <option value="105.75|bk">Hậu Giang (105°45′)</option>
+            <option value="105.00|bk">Kiên Giang (105°00′)</option>
+            <option value="107.00|bk">Lâm Đồng (107°00′)</option>
+            <option value="105.75|bk">Long An (105°45′)</option>
+            <option value="105.75|bk">Sóc Trăng (105°45′)</option>
+            <option value="106.25|bk">Tây Ninh (106°15′)</option>
+            <option value="105.75|bk">Tiền Giang (105°45′)</option>
+            <option value="105.75|bk" selected>TP. Hồ Chí Minh (105°45′)</option>
+            <option value="105.75|bk">Trà Vinh (105°45′)</option>
+            <option value="105.75|bk">Vĩnh Long (105°45′)</option>
+          </optgroup>
+          </select>
+      </div>
+
+      <!-- HN-72 zone selector -->
+      <div class="sel-wrap hidden" id="left-hn-wrap">
+        <div class="sel-label">Vùng / Múi chiếu HN-72</div>
+        <select class="psel" id="left-hn-zone" onchange="syncZones('left-hn');clearResult()">
+                    <optgroup label="── Múi 3° · Phổ biến nhất trong hồ sơ địa chính ──">
+            <option value="105|3|short">Bắc Giang (CM=105°)</option>
+            <option value="105|3|short">Bắc Kạn (CM=105°)</option>
+            <option value="105|3|short">Bắc Ninh (CM=105°)</option>
+            <option value="105|3|short">Cao Bằng (CM=105°)</option>
+            <option value="102|3|short">Điện Biên (CM=102°)</option>
+            <option value="105|3|short">Hà Giang (CM=105°)</option>
+            <option value="105|3|short">Hà Nam (CM=105°)</option>
+            <option value="105|3|short">Hà Nội (CM=105°)</option>
+            <option value="105|3|short">Hải Dương (CM=105°)</option>
+            <option value="105|3|short">Hải Phòng (CM=105°)</option>
+            <option value="105|3|short">Hòa Bình (CM=105°)</option>
+            <option value="105|3|short">Hưng Yên (CM=105°)</option>
+            <option value="102|3|short">Lai Châu (CM=102°)</option>
+            <option value="108|3|short">Lạng Sơn (CM=108°)</option>
+            <option value="105|3|short">Lào Cai (CM=105°)</option>
+            <option value="105|3|short">Nam Định (CM=105°)</option>
+            <option value="105|3|short">Ninh Bình (CM=105°)</option>
+            <option value="105|3|short">Phú Thọ (CM=105°)</option>
+            <option value="108|3|short">Quảng Ninh (CM=108°)</option>
+            <option value="105|3|short">Sơn La (CM=105°)</option>
+            <option value="105|3|short">Thái Bình (CM=105°)</option>
+            <option value="105|3|short">Thái Nguyên (CM=105°)</option>
+            <option value="105|3|short">Thanh Hóa (CM=105°)</option>
+            <option value="105|3|short">Tuyên Quang (CM=105°)</option>
+            <option value="105|3|short">Vĩnh Phúc (CM=105°)</option>
+            <option value="105|3|short">Yên Bái (CM=105°)</option>
+            <option value="108|3|short">Bình Định (CM=108°)</option>
+            <option value="108|3|short">Đà Nẵng (CM=108°)</option>
+            <option value="108|3|short">Đắk Lắk (CM=108°)</option>
+            <option value="108|3|short">Đắk Nông (CM=108°)</option>
+            <option value="108|3|short">Gia Lai (CM=108°)</option>
+            <option value="105|3|short">Hà Tĩnh (CM=105°)</option>
+            <option value="108|3|short">Khánh Hòa (CM=108°)</option>
+            <option value="108|3|short">Kon Tum (CM=108°)</option>
+            <option value="105|3|short">Nghệ An (CM=105°)</option>
+            <option value="108|3|short">Ninh Thuận (CM=108°)</option>
+            <option value="108|3|short">Phú Yên (CM=108°)</option>
+            <option value="105|3|short">Quảng Bình (CM=105°)</option>
+            <option value="108|3|short">Quảng Nam (CM=108°)</option>
+            <option value="108|3|short">Quảng Ngãi (CM=108°)</option>
+            <option value="108|3|short">Quảng Trị (CM=108°)</option>
+            <option value="108|3|short">Thừa Thiên Huế (CM=108°)</option>
+            <option value="105|3|short">An Giang (CM=105°)</option>
+            <option value="108|3|short">Bà Rịa - Vũng Tàu (CM=108°)</option>
+            <option value="105|3|short">Bạc Liêu (CM=105°)</option>
+            <option value="105|3|short">Bến Tre (CM=105°)</option>
+            <option value="108|3|short">Bình Dương (CM=108°)</option>
+            <option value="108|3|short">Bình Phước (CM=108°)</option>
+            <option value="108|3|short">Bình Thuận (CM=108°)</option>
+            <option value="105|3|short">Cà Mau (CM=105°)</option>
+            <option value="105|3|short">Cần Thơ (CM=105°)</option>
+            <option value="108|3|short">Đồng Nai (CM=108°)</option>
+            <option value="105|3|short">Đồng Tháp (CM=105°)</option>
+            <option value="105|3|short">Hậu Giang (CM=105°)</option>
+            <option value="105|3|short">Kiên Giang (CM=105°)</option>
+            <option value="108|3|short">Lâm Đồng (CM=108°)</option>
+            <option value="105|3|short">Long An (CM=105°)</option>
+            <option value="105|3|short">Sóc Trăng (CM=105°)</option>
+            <option value="105|3|short">Tây Ninh (CM=105°)</option>
+            <option value="105|3|short">Tiền Giang (CM=105°)</option>
+            <option value="108|3|short" selected>TP. Hồ Chí Minh (CM=108°)</option>
+            <option value="105|3|short">Trà Vinh (CM=105°)</option>
+            <option value="105|3|short">Vĩnh Long (CM=105°)</option>
+          </optgroup>
+          <optgroup label="── Múi 6° (Gauss-Krüger tiêu chuẩn) ──">
+            <option value="105|6|short">Zone 18 · CM=105° · Tọa độ rút gọn (X ≈ 5xxxxxx)</option>
+            <option value="105|6|full">Zone 18 · CM=105° · Tọa độ đầy đủ (X bắt đầu 185xxxxx)</option>
+            <option value="111|6|short">Zone 19 · CM=111° · Tọa độ rút gọn (X ≈ 5xxxxxx)</option>
+            <option value="111|6|full">Zone 19 · CM=111° · Tọa độ đầy đủ (X bắt đầu 195xxxxx)</option>
+          </optgroup>
+        </select>
+        <div class="sel-hint">
+          ★ <strong>Đà Nẵng (X≈522067, Y≈1769990)</strong> → chọn <strong>CM=108° Múi 3°</strong><br>
+          Nếu X bắt đầu bằng 18 hoặc 19 → chọn Múi 6° Tọa độ đầy đủ tương ứng
+        </div>
+      </div>
+
+      <div class="inputs-wrap" id="left-inputs-wrap"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+        <button class="pt-add-btn" id="add-pt-btn" onclick="addPoint()">＋ Thêm điểm</button>
+      </div>
+      <button class="cvt-btn" onclick="convert()">&#x1F504; Chuyển đổi</button>
+      <div id="msg-err" class="msg msg-err hidden"></div>
+      <div id="msg-warn" class="msg msg-warn hidden"></div>
+    </div>
+
+    <!-- RIGHT: OUTPUT -->
+    <div class="panel">
+      <div class="zone-badge" id="right-badge">
+        <span class="dot dot-wg"></span>
+        <span id="right-badge-text">WGS-84 · Hệ tọa độ toàn cầu (GPS, Google Maps)</span>
+      </div>
+
+      <div class="sel-wrap hidden" id="right-vn-wrap">
+        <div class="sel-label">Tỉnh / Thành phố đích</div>
+        <select class="psel" id="right-vn-prov" onchange="syncZones('right-vn');clearResult()">
+          <optgroup label="── Miền Bắc (EPSG toàn quốc) ──">
+            <option value="106.00|ep">Bắc Giang (106°00′)</option>
+            <option value="106.50|ep">Bắc Kạn (106°30′)</option>
+            <option value="106.00|ep">Bắc Ninh (106°00′)</option>
+            <option value="106.50|ep">Cao Bằng (106°30′)</option>
+            <option value="104.00|ep">Điện Biên (104°00′)</option>
+            <option value="105.50|ep">Hà Giang (105°30′)</option>
+            <option value="105.75|ep">Hà Nam (105°45′)</option>
+            <option value="105.75|ep">Hà Nội (105°45′)</option>
+            <option value="106.00|ep">Hải Dương (106°00′)</option>
+            <option value="106.00|ep">Hải Phòng (106°00′)</option>
+            <option value="106.25|ep">Hòa Bình (106°15′)</option>
+            <option value="106.00|ep">Hưng Yên (106°00′)</option>
+            <option value="103.25|ep">Lai Châu (103°15′)</option>
+            <option value="107.75|ep">Lạng Sơn (107°45′)</option>
+            <option value="104.50|ep">Lào Cai (104°30′)</option>
+            <option value="105.75|ep">Nam Định (105°45′)</option>
+            <option value="105.75|ep">Ninh Bình (105°45′)</option>
+            <option value="105.75|ep">Phú Thọ (105°45′)</option>
+            <option value="107.50|ep">Quảng Ninh (107°30′)</option>
+            <option value="104.00|ep">Sơn La (104°00′)</option>
+            <option value="106.00|ep">Thái Bình (106°00′)</option>
+            <option value="106.00|ep">Thái Nguyên (106°00′)</option>
+            <option value="105.75|ep">Thanh Hóa (105°45′)</option>
+            <option value="105.50|ep">Tuyên Quang (105°30′)</option>
+            <option value="104.75|ep">Vĩnh Phúc (104°45′)</option>
+            <option value="104.50|ep">Yên Bái (104°30′)</option>
+          </optgroup>
+          <optgroup label="── Miền Trung (EPSG toàn quốc) ──">
+            <option value="107.75|ep">Bình Định (107°45′)</option>
+            <option value="107.75|ep">Đà Nẵng (107°45′)</option>
+            <option value="107.75|ep">Đắk Lắk (107°45′)</option>
+            <option value="107.75|ep">Đắk Nông (107°45′)</option>
+            <option value="107.75|ep">Gia Lai (107°45′)</option>
+            <option value="105.75|ep">Hà Tĩnh (105°45′)</option>
+            <option value="107.75|ep">Khánh Hòa (107°45′)</option>
+            <option value="107.75|ep">Kon Tum (107°45′)</option>
+            <option value="105.75|ep">Nghệ An (105°45′)</option>
+            <option value="107.75|ep">Ninh Thuận (107°45′)</option>
+            <option value="107.75|ep">Phú Yên (107°45′)</option>
+            <option value="106.25|ep">Quảng Bình (106°15′)</option>
+            <option value="107.75|ep">Quảng Nam (107°45′)</option>
+            <option value="107.75|ep">Quảng Ngãi (107°45′)</option>
+            <option value="107.00|ep">Quảng Trị (107°00′)</option>
+            <option value="107.00|ep">Thừa Thiên Huế (107°00′)</option>
+          </optgroup>
+          <optgroup label="── Miền Nam (Bộ tham số Bách Khoa 2010) ──">
+            <option value="104.75|bk">An Giang (104°45′)</option>
+            <option value="107.75|bk">Bà Rịa - Vũng Tàu (107°45′)</option>
+            <option value="105.00|bk">Bạc Liêu (105°00′)</option>
+            <option value="105.75|bk">Bến Tre (105°45′)</option>
+            <option value="106.50|bk">Bình Dương (106°30′)</option>
+            <option value="106.25|bk">Bình Phước (106°15′)</option>
+            <option value="107.75|bk">Bình Thuận (107°45′)</option>
+            <option value="105.00|bk">Cà Mau (105°00′)</option>
+            <option value="105.75|bk">Cần Thơ (105°45′)</option>
+            <option value="107.75|bk">Đồng Nai (107°45′)</option>
+            <option value="105.75|bk">Đồng Tháp (105°45′)</option>
+            <option value="105.75|bk">Hậu Giang (105°45′)</option>
+            <option value="105.00|bk">Kiên Giang (105°00′)</option>
+            <option value="107.00|bk">Lâm Đồng (107°00′)</option>
+            <option value="105.75|bk">Long An (105°45′)</option>
+            <option value="105.75|bk">Sóc Trăng (105°45′)</option>
+            <option value="106.25|bk">Tây Ninh (106°15′)</option>
+            <option value="105.75|bk">Tiền Giang (105°45′)</option>
+            <option value="105.75|bk" selected>TP. Hồ Chí Minh (105°45′)</option>
+            <option value="105.75|bk">Trà Vinh (105°45′)</option>
+            <option value="105.75|bk">Vĩnh Long (105°45′)</option>
+          </optgroup>
+          </select>
+      </div>
+
+      <div class="sel-wrap hidden" id="right-hn-wrap">
+        <div class="sel-label">Vùng / Múi chiếu HN-72 đích</div>
+        <select class="psel" id="right-hn-zone" onchange="syncZones('right-hn');clearResult()">
+                    <optgroup label="── Múi 3° · Phổ biến nhất trong hồ sơ địa chính ──">
+            <option value="105|3|short">Bắc Giang (CM=105°)</option>
+            <option value="105|3|short">Bắc Kạn (CM=105°)</option>
+            <option value="105|3|short">Bắc Ninh (CM=105°)</option>
+            <option value="105|3|short">Cao Bằng (CM=105°)</option>
+            <option value="102|3|short">Điện Biên (CM=102°)</option>
+            <option value="105|3|short">Hà Giang (CM=105°)</option>
+            <option value="105|3|short">Hà Nam (CM=105°)</option>
+            <option value="105|3|short">Hà Nội (CM=105°)</option>
+            <option value="105|3|short">Hải Dương (CM=105°)</option>
+            <option value="105|3|short">Hải Phòng (CM=105°)</option>
+            <option value="105|3|short">Hòa Bình (CM=105°)</option>
+            <option value="105|3|short">Hưng Yên (CM=105°)</option>
+            <option value="102|3|short">Lai Châu (CM=102°)</option>
+            <option value="108|3|short">Lạng Sơn (CM=108°)</option>
+            <option value="105|3|short">Lào Cai (CM=105°)</option>
+            <option value="105|3|short">Nam Định (CM=105°)</option>
+            <option value="105|3|short">Ninh Bình (CM=105°)</option>
+            <option value="105|3|short">Phú Thọ (CM=105°)</option>
+            <option value="108|3|short">Quảng Ninh (CM=108°)</option>
+            <option value="105|3|short">Sơn La (CM=105°)</option>
+            <option value="105|3|short">Thái Bình (CM=105°)</option>
+            <option value="105|3|short">Thái Nguyên (CM=105°)</option>
+            <option value="105|3|short">Thanh Hóa (CM=105°)</option>
+            <option value="105|3|short">Tuyên Quang (CM=105°)</option>
+            <option value="105|3|short">Vĩnh Phúc (CM=105°)</option>
+            <option value="105|3|short">Yên Bái (CM=105°)</option>
+            <option value="108|3|short">Bình Định (CM=108°)</option>
+            <option value="108|3|short">Đà Nẵng (CM=108°)</option>
+            <option value="108|3|short">Đắk Lắk (CM=108°)</option>
+            <option value="108|3|short">Đắk Nông (CM=108°)</option>
+            <option value="108|3|short">Gia Lai (CM=108°)</option>
+            <option value="105|3|short">Hà Tĩnh (CM=105°)</option>
+            <option value="108|3|short">Khánh Hòa (CM=108°)</option>
+            <option value="108|3|short">Kon Tum (CM=108°)</option>
+            <option value="105|3|short">Nghệ An (CM=105°)</option>
+            <option value="108|3|short">Ninh Thuận (CM=108°)</option>
+            <option value="108|3|short">Phú Yên (CM=108°)</option>
+            <option value="105|3|short">Quảng Bình (CM=105°)</option>
+            <option value="108|3|short">Quảng Nam (CM=108°)</option>
+            <option value="108|3|short">Quảng Ngãi (CM=108°)</option>
+            <option value="108|3|short">Quảng Trị (CM=108°)</option>
+            <option value="108|3|short">Thừa Thiên Huế (CM=108°)</option>
+            <option value="105|3|short">An Giang (CM=105°)</option>
+            <option value="108|3|short">Bà Rịa - Vũng Tàu (CM=108°)</option>
+            <option value="105|3|short">Bạc Liêu (CM=105°)</option>
+            <option value="105|3|short">Bến Tre (CM=105°)</option>
+            <option value="108|3|short">Bình Dương (CM=108°)</option>
+            <option value="108|3|short">Bình Phước (CM=108°)</option>
+            <option value="108|3|short">Bình Thuận (CM=108°)</option>
+            <option value="105|3|short">Cà Mau (CM=105°)</option>
+            <option value="105|3|short">Cần Thơ (CM=105°)</option>
+            <option value="108|3|short">Đồng Nai (CM=108°)</option>
+            <option value="105|3|short">Đồng Tháp (CM=105°)</option>
+            <option value="105|3|short">Hậu Giang (CM=105°)</option>
+            <option value="105|3|short">Kiên Giang (CM=105°)</option>
+            <option value="108|3|short">Lâm Đồng (CM=108°)</option>
+            <option value="105|3|short">Long An (CM=105°)</option>
+            <option value="105|3|short">Sóc Trăng (CM=105°)</option>
+            <option value="105|3|short">Tây Ninh (CM=105°)</option>
+            <option value="105|3|short">Tiền Giang (CM=105°)</option>
+            <option value="108|3|short" selected>TP. Hồ Chí Minh (CM=108°)</option>
+            <option value="105|3|short">Trà Vinh (CM=105°)</option>
+            <option value="105|3|short">Vĩnh Long (CM=105°)</option>
+          </optgroup>
+          <optgroup label="── Múi 6° ──">
+            <option value="105|6|short">Zone 18 · CM=105° · Tọa độ rút gọn</option>
+            <option value="105|6|full">Zone 18 · CM=105° · Tọa độ đầy đủ (185xxxxx)</option>
+            <option value="111|6|short">Zone 19 · CM=111° · Tọa độ rút gọn</option>
+            <option value="111|6|full">Zone 19 · CM=111° · Tọa độ đầy đủ (195xxxxx)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Polyline option: shown only when output is WGS-84 and multi-point -->
+      <div class="polyline-opt hidden" id="polyline-opt-wrap">
+        <input type="checkbox" id="chk-polyline" onchange="polylineMode=this.checked;if(document.getElementById('result-out').innerHTML)convert();">
+        <label for="chk-polyline">Nối các điểm thành <span>đường thẳng</span> trên bản đồ</label>
+      </div>
+
+      <div class="result-area">
+        <div class="result-ph" id="result-ph">
+          <span class="icon">&#x1F5FA;&#xFE0F;</span>
+          <span>Nhập tọa độ bên trái và<br>nhấn <strong>Chuyển đổi</strong></span>
+        </div>
+        <div id="result-out" class="hidden"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="info-strip">
+  <div class="icard">
+    <div class="icard-title" style="color:var(--hn)">
+      <span class="badge bdg-hn">HN-72</span>Hà Nội 1972
+    </div>
+    <div class="icard-body">Hệ cũ, ellipsoid Krassovsky. Múi chiếu 3° phổ biến nhất trong hồ sơ địa chính trước năm 2000. Kinh tuyến trục 102°/105°/108°/111° tùy vùng.</div>
+  </div>
+  <div class="icard">
+    <div class="icard-title" style="color:var(--vn)">
+      <span class="badge bdg-vn">VN-2000</span>Hệ hiện hành
+    </div>
+    <div class="icard-body">Hệ chính thức từ 2000, ellipsoid WGS84, múi TM-3°, k=0.9999. Dùng trong tất cả bản đồ địa chính, sổ đỏ hiện nay.</div>
+  </div>
+  <div class="icard">
+    <div class="icard-title" style="color:var(--wg)">
+      <span class="badge bdg-wg">WGS-84</span>Toàn cầu
+    </div>
+    <div class="icard-body">Hệ quốc tế dùng cho GPS, Google Maps, vệ tinh. Tọa độ dạng Kinh độ / Vĩ độ thập phân (độ).</div>
+  </div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// PROJ4 — Tham số chuẩn
+// ══════════════════════════════════════════════════════
+proj4.defs("WGS84","+proj=longlat +datum=WGS84 +no_defs");
+
+// VN-2000: ellipsoid WGS84, TM-3°, k=0.9999
+const TW_EPSG = "-191.90441429,-39.30318279,-111.45032835,-0.00928836,0.01975479,-0.00427372,0.252906278";
+const TW_BK   = "-192.873,-39.382,-111.202,0.00205,0.0005,-0.00335,0.0188"; // ĐH Bách Khoa 2010
+
+// HN-72: ellipsoid Krassovsky (Pulkovo 1942), towgs84 hiệu chỉnh cho khu vực Việt Nam
+// Công thức đúng (proj4js dùng chuỗi HN72→WGS84→VN2000):
+//   TW_HN = (geocentric_VN2000 - geocentric_HN72) + TW_VN
+// Điểm kiểm tra: HN-72 CM=108° (522067.78, 1769990.83) → VN-2000 CM=107°45′ (548667.407, 1769904.768)
+// Sai số sau hiệu chỉnh: ΔX<0.001m, ΔY<0.001m
+const TW_HN = "-6.723762,-110.768398,-65.510514,0,0,0,0";
+
+function vn2000Proj(cm, bk) {
+  const tw = bk ? TW_BK : TW_EPSG;
+  return `+proj=tmerc +lat_0=0 +lon_0=${cm} +k=0.9999 +x_0=500000 +y_0=0 +ellps=WGS84 +towgs84=${tw} +units=m +no_defs`;
+}
+
+// HN-72 Múi 3°: k=1.0, false_easting=500000 (dạng rút gọn — phổ biến trong hồ sơ địa chính VN)
+// HN-72 Múi 6° rút gọn: k=1.0, fe=500000
+// HN-72 Múi 6° đầy đủ:  k=1.0, fe=zone*1000000+500000 (zone=CM/6, vd CM=105→zone18→fe=18500000)
+function hn72Proj(cm, muiDeg, full) {
+  let fe = 500000;
+  if (muiDeg === 6 && full) {
+    const zone = Math.round(cm / 6); // CM=105 → zone=18, CM=111 → zone=19 (quy ước N×6=CM)
+    fe = zone * 1000000 + 500000;    // zone18 → 18500000
+  }
+  return `+proj=tmerc +lat_0=0 +lon_0=${cm} +k=1.0 +x_0=${fe} +y_0=0 +ellps=krass +towgs84=${TW_HN} +units=m +no_defs`;
+}
+
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let leftSys  = 'vn2000';
+let rightSys = 'wgs84';
+const IS_PROJ = {hn72:true, vn2000:true, wgs84:false};
+let polylineMode = false; // trạng thái checkbox "Nối đường" — độc lập với DOM
+const SYS_INFO = {
+  hn72:   {dot:'dot-hn', desc:'HN-72 · Hà Nội 1972 · Gauss-Krüger Múi 3°/6° · Krassovsky'},
+  vn2000: {dot:'dot-vn', desc:'VN-2000 · Hệ địa chính hiện hành · TM-3° · k=0.9999'},
+  wgs84:  {dot:'dot-wg', desc:'WGS-84 · Hệ toàn cầu · Kinh độ / Vĩ độ thập phân'},
+};
+
+// ══════════════════════════════════════════════════════
+// READ ZONE PARAMS
+// ══════════════════════════════════════════════════════
+
+// VN-2000: option value = "105.75|bk" or "107.75|ep"
+function readVnZone(side) {
+  const id = side==='left' ? 'left-vn-prov' : 'right-vn-prov';
+  const [cmStr, flag] = document.getElementById(id).value.split('|');
+  return {cm: parseFloat(cmStr), bk: flag==='bk'};
+}
+
+// HN-72: option value = "108|3|short" or "105|6|full"
+function readHnZone(side) {
+  const id = side==='left' ? 'left-hn-zone' : 'right-hn-zone';
+  const [cmStr, muiStr, fmt] = document.getElementById(id).value.split('|');
+  return {cm: parseFloat(cmStr), mui: parseInt(muiStr), full: fmt==='full'};
+}
+
+// ══════════════════════════════════════════════════════
+// BUILD PROJ STRING
+// ══════════════════════════════════════════════════════
+function buildProj(sys, side) {
+  if (sys === 'wgs84') return 'WGS84';
+  if (sys === 'vn2000') {
+    const z = readVnZone(side);
+    proj4.defs('_VN', vn2000Proj(z.cm, z.bk));
+    return '_VN';
+  }
+  if (sys === 'hn72') {
+    const z = readHnZone(side);
+    proj4.defs('_HN', hn72Proj(z.cm, z.mui, z.full));
+    return '_HN';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════════
+function toDMS(dd, isLat) {
+  const dir = isLat ? (dd>=0?'N':'S') : (dd>=0?'E':'W');
+  const abs=Math.abs(dd), deg=Math.floor(abs);
+  const mf=(abs-deg)*60, min=Math.floor(mf);
+  const sec=((mf-min)*60).toFixed(4);
+  return `${deg}° ${min}' ${sec}" ${dir}`;
+}
+
+function updateBadge(side, sys) {
+  const info = SYS_INFO[sys];
+  const badge = document.getElementById(side+'-badge');
+  badge.querySelector('.dot').className = 'dot '+info.dot;
+  document.getElementById(side+'-badge-text').textContent = info.desc;
+}
+
+function updateWrappers(side) {
+  const sys = side==='left' ? leftSys : rightSys;
+  if (side==='left') {
+    document.getElementById('left-vn-wrap').classList.toggle('hidden', sys!=='vn2000');
+    document.getElementById('left-hn-wrap').classList.toggle('hidden', sys!=='hn72');
+    ptCount = 1; // reset về 1 điểm khi đổi hệ
+    renderInputRows(); // no savedVals — system changed
+  } else {
+    document.getElementById('right-vn-wrap').classList.toggle('hidden', sys!=='vn2000');
+    document.getElementById('right-hn-wrap').classList.toggle('hidden', sys!=='hn72');
+  }
+}
+
+// ── Multi-point state ──
+let ptCount = 1; // current number of point rows
+
+function ptInputHTML(sys, idx) {
+  const isHn = sys==='hn72';
+  if (IS_PROJ[sys]) {
+    const phE = isHn ? 'vd: 522067.78' : 'vd: 602082.10';
+    const phN = isHn ? 'vd: 1769990.83' : 'vd: 1200817.39';
+    return '<input class="cinp" type="number" id="left-e-'+idx+'" placeholder="'+phE+'" step="0.001">'
+         + '<input class="cinp" type="number" id="left-n-'+idx+'" placeholder="'+phN+'" step="0.001">';
+  } else {
+    return '<input class="cinp" type="number" id="left-lat-'+idx+'" placeholder="vd: 16.003278" step="0.000001">'
+         + '<input class="cinp" type="number" id="left-lon-'+idx+'" placeholder="vd: 108.206361" step="0.000001">';
+  }
+}
+
+function saveCurrentValues() {
+  const vals = [], sys = leftSys;
+  for (let i=0; i<ptCount; i++) {
+    if (IS_PROJ[sys]) {
+      const e=document.getElementById('left-e-'+i), n=document.getElementById('left-n-'+i);
+      vals.push({e: e?e.value:'', n: n?n.value:''});
+    } else {
+      const la=document.getElementById('left-lat-'+i), lo=document.getElementById('left-lon-'+i);
+      vals.push({lat: la?la.value:'', lon: lo?lo.value:''});
+    }
+  }
+  return vals;
+}
+
+function restoreValues(vals) {
+  const sys = leftSys;
+  vals.forEach((v,i) => {
+    if (IS_PROJ[sys]) {
+      const e=document.getElementById('left-e-'+i), n=document.getElementById('left-n-'+i);
+      if(e&&v.e!==undefined) e.value=v.e;
+      if(n&&v.n!==undefined) n.value=v.n;
+    } else {
+      const la=document.getElementById('left-lat-'+i), lo=document.getElementById('left-lon-'+i);
+      if(la&&v.lat!==undefined) la.value=v.lat;
+      if(lo&&v.lon!==undefined) lo.value=v.lon;
+    }
+  });
+}
+
+function tableHeaders(sys) {
+  if (IS_PROJ[sys]) {
+    return '<div class="inp-th">Điểm</div>'
+         + '<div class="inp-th th-x">Tọa độ X (Đông)</div>'
+         + '<div class="inp-th th-y">Tọa độ Y (Bắc)</div>'
+         + '<div class="inp-th"></div>';
+  } else {
+    return '<div class="inp-th">Điểm</div>'
+         + '<div class="inp-th th-x">Vĩ độ (°)</div>'
+         + '<div class="inp-th th-y">Kinh độ (°)</div>'
+         + '<div class="inp-th"></div>';
+  }
+}
+
+function renderInputRows(savedVals) {
+  const sys = leftSys;
+  const wrap = document.getElementById('left-inputs-wrap');
+  if (!wrap) return;
+  let html = '<div class="inp-table-head">' + tableHeaders(sys) + '</div>';
+  html += '<div class="inp-table-body">';
+  for (let i=0; i<ptCount; i++) {
+    const delBtn = ptCount > 1
+      ? '<button class="pt-del" onclick="removePoint('+i+')" title="Xóa điểm này">✕</button>'
+      : '<div class="pt-del-ph"></div>';
+    html += '<div class="pt-row" id="pt-row-'+i+'"><div class="pt-num">'+(i+1)+'</div>'
+          + ptInputHTML(sys,i) + delBtn + '</div>';
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  if (savedVals) restoreValues(savedVals);
+}
+
+function buildInputFields(side) {
+  if (side === 'left') {
+    ptCount = 1;
+    renderInputRows();
+  }
+  // Right side has no input fields (output only)
+}
+
+function addPoint() {
+  const saved = saveCurrentValues();
+  ptCount++;
+  renderInputRows(saved);
+  // Focus the new row's first input
+  const sys = leftSys;
+  const firstId = IS_PROJ[sys] ? 'left-e-'+(ptCount-1) : 'left-lat-'+(ptCount-1);
+  setTimeout(() => { const el=document.getElementById(firstId); if(el) el.focus(); }, 50);
+  clearResult();
+}
+
+function removePoint(delIdx) {
+  if (ptCount <= 1) return;
+  const saved = saveCurrentValues();
+  // Remove the deleted index
+  saved.splice(delIdx, 1);
+  ptCount--;
+  renderInputRows(saved);
+  clearResult();
+}
+
+function clearResult() {
+  document.getElementById('result-ph').classList.remove('hidden');
+  const out = document.getElementById('result-out');
+  out.classList.add('hidden'); out.innerHTML='';
+  document.getElementById('msg-err').classList.add('hidden');
+  document.getElementById('msg-warn').classList.add('hidden');
+  // Ẩn checkbox nhưng GIỮ NGUYÊN polylineMode (không reset trạng thái check)
+  const pw = document.getElementById('polyline-opt-wrap');
+  if (pw) pw.classList.add('hidden');
+}
+
+function showErr(m)  { const e=document.getElementById('msg-err');  e.textContent=m; e.classList.remove('hidden'); }
+function showWarn(m) { const e=document.getElementById('msg-warn'); e.textContent=m; e.classList.remove('hidden'); }
+
+// ══════════════════════════════════════════════════════
+// SYSTEM SELECTION
+// ══════════════════════════════════════════════════════
+function selectSys(side, sys) {
+  const other = side==='left'?'right':'left';
+  const otherSys = side==='left' ? rightSys : leftSys;
+  if (sys === otherSys) {
+    const cur = side==='left' ? leftSys : rightSys;
+    if (side==='left') rightSys=cur; else leftSys=cur;
+    refreshPanel(other, side==='left'?rightSys:leftSys);
+    updateBadge(other, side==='left'?rightSys:leftSys);
+    updateWrappers(other);
+  }
+  if (side==='left') leftSys=sys; else rightSys=sys;
+  refreshPanel(side, sys);
+  updateBadge(side, sys);
+  updateWrappers(side);
+  clearResult();
+}
+
+function refreshPanel(side, sys) {
+  document.getElementById(side+'-sys-panel').querySelectorAll('.sys-btn')
+    .forEach(b => b.classList.toggle('active', b.dataset.sys===sys));
+}
+
+function swapSystems() {
+  [leftSys, rightSys] = [rightSys, leftSys];
+  polylineMode = false; // reset khi đổi hệ
+  refreshPanel('left', leftSys);  refreshPanel('right', rightSys);
+  updateBadge('left', leftSys);   updateBadge('right', rightSys);
+  updateWrappers('left');         updateWrappers('right');
+  clearResult();
+}
+
+// ══════════════════════════════════════════════════════
+// COPY
+// ══════════════════════════════════════════════════════
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent='✓ Đã chép'; btn.classList.add('ok');
+    setTimeout(()=>{ btn.textContent='Sao chép'; btn.classList.remove('ok'); }, 1600);
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// CONVERT
+// ══════════════════════════════════════════════════════
+function convert() {
+  document.getElementById('msg-err').classList.add('hidden');
+  document.getElementById('msg-warn').classList.add('hidden');
+  try {
+    const srcDef = buildProj(leftSys, 'left');
+    const dstDef = buildProj(rightSys, 'right');
+    const results = [];       // [{outA, outB, rowIdx}]
+    let anyInvalid = false;
+    const partialRows = [];   // hàng chỉ nhập 1 trong 2 ô → báo lỗi
+    const removedRows = [];   // hàng bỏ trống cả 2 ô → xóa tự động
+
+    for (let i=0; i<ptCount; i++) {
+      let inCoord;
+      if (IS_PROJ[leftSys]) {
+        const eEl=document.getElementById('left-e-'+i);
+        const nEl=document.getElementById('left-n-'+i);
+        const eVal=eEl ? eEl.value.trim() : '';
+        const nVal=nEl ? nEl.value.trim() : '';
+        const hasE = eVal !== '';
+        const hasN = nVal !== '';
+        if (!hasE && !hasN) { removedRows.push(i); continue; }      // cả 2 trống → bỏ qua
+        if (hasE !== hasN) { partialRows.push(i+1); continue; }     // chỉ 1 ô → báo lỗi
+        inCoord=[parseFloat(eVal), parseFloat(nVal)];
+      } else {
+        const latEl=document.getElementById('left-lat-'+i);
+        const lonEl=document.getElementById('left-lon-'+i);
+        const latVal=latEl ? latEl.value.trim() : '';
+        const lonVal=lonEl ? lonEl.value.trim() : '';
+        const hasLat = latVal !== '';
+        const hasLon = lonVal !== '';
+        if (!hasLat && !hasLon) { removedRows.push(i); continue; }
+        if (hasLat !== hasLon) { partialRows.push(i+1); continue; }
+        inCoord=[parseFloat(lonVal), parseFloat(latVal)];
+      }
+      const [outA, outB] = proj4(srcDef, dstDef, inCoord);
+      results.push([outA, outB]);
+      if (!IS_PROJ[rightSys]) {
+        if (outB<7||outB>24||outA<100||outA>115) anyInvalid=true;
+      }
+    }
+
+    // Báo lỗi nếu có hàng nhập thiếu 1 ô
+    if (partialRows.length > 0) {
+      showErr('❌ Điểm ' + partialRows.join(', ') + ': Vui lòng nhập đầy đủ cả 2 tọa độ X và Y (hoặc để trống cả 2 để bỏ qua).');
+      return;
+    }
+
+    // Không có điểm nào hợp lệ
+    if (results.length === 0) {
+      showErr('❌ Vui lòng nhập tọa độ cho ít nhất 1 điểm.');
+      return;
+    }
+
+    // Xóa các hàng trống (cả 2 ô trống) khỏi UI
+    if (removedRows.length > 0) {
+      const saved = saveCurrentValues();
+      // Lọc bỏ các index bị xóa
+      const filtered = saved.filter((_, idx) => !removedRows.includes(idx));
+      ptCount = filtered.length;
+      renderInputRows(filtered);
+    }
+
+    if (anyInvalid)
+      showWarn('⚠️ Một số điểm có kết quả có vẻ nằm ngoài lãnh thổ VN — kiểm tra lại tọa độ và vùng/múi chiếu.');
+
+    if (IS_PROJ[rightSys]) {
+      let note='';
+      if (rightSys==='vn2000') {
+        const z=readVnZone('right');
+        note=`📐 Kinh tuyến trục: <b>${z.cm}°</b> · ${z.bk?'Bộ tham số ĐH Bách Khoa 2010':'EPSG toàn quốc'}`;
+      } else if (rightSys==='hn72') {
+        const z=readHnZone('right');
+        note=`📐 HN-72 Múi ${z.mui}° · CM=${z.cm}° · ${z.full?'Tọa độ đầy đủ':'Tọa độ rút gọn'}`;
+      }
+      renderProjResults(results, rightSys, note);
+    } else {
+      renderGeoResults(results);
+    }
+  } catch(err) {
+    showErr('❌ Lỗi tính toán: '+err.message);
+  }
+}
+
+
+function cc(sys){ return sys==='hn72'?'c-hn':sys==='vn2000'?'c-vn':'c-wg'; }
+
+function cc(sys){ return sys==='hn72'?'c-hn':sys==='vn2000'?'c-vn':'c-wg'; }
+
+function ptRowProjHTML(E, N, sys, idx, showNote, note) {
+  const c=cc(sys), n=idx+1;
+  return `<div class="res-pt-row">
+    <div class="res-pt-num">${n}</div>
+    <div class="res-pt-fields">
+      <div class="res-row-2">
+        <div class="rbox"><div class="rbox-hd"><span class="rlabel">Tọa độ X (Hướng Đông)</span>
+          <button class="copy-btn" onclick="copyText('${E.toFixed(3)}',this)">Sao chép</button></div>
+          <div class="rval ${c}">${E.toFixed(3)}</div></div>
+        <div class="rbox"><div class="rbox-hd"><span class="rlabel">Tọa độ Y (Hướng Bắc)</span>
+          <button class="copy-btn" onclick="copyText('${N.toFixed(3)}',this)">Sao chép</button></div>
+          <div class="rval ${c}">${N.toFixed(3)}</div></div>
+      </div>
+      ${showNote ? `<div class="rnote-sm">${note}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function ptRowGeoHTML(lat, lon, idx) {
+  const c=cc(rightSys), n=idx+1;
+  const lats=lat.toFixed(10), lons=lon.toFixed(10);
+  return `<div class="res-pt-row">
+    <div class="res-pt-num">${n}</div>
+    <div class="res-pt-fields">
+      <div class="res-row-2">
+        <div class="rbox"><div class="rbox-hd"><span class="rlabel">Vĩ độ — Latitude</span>
+          <button class="copy-btn" onclick="copyText('${lats}',this)">Sao chép</button></div>
+          <div class="rval ${c}">${lats}°</div>
+          <div class="rdms">${toDMS(lat,true)}</div></div>
+        <div class="rbox"><div class="rbox-hd"><span class="rlabel">Kinh độ — Longitude</span>
+          <button class="copy-btn" onclick="copyText('${lons}',this)">Sao chép</button></div>
+          <div class="rval ${c}">${lons}°</div>
+          <div class="rdms">${toDMS(lon,false)}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderProjResults(results, sys, note) {
+  document.getElementById('result-ph').classList.add('hidden');
+  let html = '<div class="anim res-pt-wrap">';
+  results.forEach(([E,N], i) => {
+    html += ptRowProjHTML(E, N, sys, i, i===results.length-1, note);
+  });
+  html += '</div>';
+  const out = document.getElementById('result-out');
+  out.innerHTML = html; out.classList.remove('hidden');
+}
+
+// Show/hide polyline checkbox based on result count
+function updatePolylineOptVisibility(count) {
+  const wrap = document.getElementById('polyline-opt-wrap');
+  if (!wrap) return;
+  const show = rightSys === 'wgs84' && count >= 2;
+  wrap.classList.toggle('hidden', !show);
+  // Sync checkbox UI với global state
+  const chk = document.getElementById('chk-polyline');
+  if (chk) chk.checked = polylineMode;
+}
+
+// Build Google Maps Embed URL for single marker
+function singleMarkerEmbed(lat, lon) {
+  const lf=lat.toFixed(8), lo=lon.toFixed(8);
+  return 'https://maps.google.com/maps?q='+lf+','+lo+'&t=k&z=18&ie=UTF8&iwloc=&output=embed';
+}
+
+// Build polyline map using Google Maps Static API via canvas
+function buildPolylineMap(results) {
+  // Use Google Maps Embed with path - encode as waypoints string
+  // We draw the polyline ourselves on a canvas over an iframe
+  const pts = results.map(([lon,lat]) => ({lat:parseFloat(lat.toFixed(8)), lon:parseFloat(lon.toFixed(8))}));
+  const center_lat = pts.reduce((s,p)=>s+p.lat,0)/pts.length;
+  const center_lon = pts.reduce((s,p)=>s+p.lon,0)/pts.length;
+
+  // Build encoded polyline for Google Maps Static API
+  // path=color:0xFFD700ff|weight:4|lat1,lon1|lat2,lon2|...
+  const pathCoords = pts.map(p=>p.lat+','+p.lon).join('|');
+  const pathParam = 'color:0xFFCC00ff|weight:4|' + pathCoords;
+  // Markers for each point (numbered)
+  const markerParams = pts.map((p,i)=>'markers=color:red|label:'+(i+1)+'|'+p.lat+','+p.lon).join('&');
+  const staticUrl = 'https://maps.googleapis.com/maps/api/staticmap'
+    + '?size=640x320&scale=2&maptype=satellite'
+    + '&path=' + encodeURIComponent(pathParam)
+    + '&' + markerParams
+    + '&center=' + center_lat + ',' + center_lon;
+
+  // Fallback: use Embed API centered at first point, show note
+  const embedUrl = singleMarkerEmbed(pts[0].lat, pts[0].lon);
+  return { staticUrl, embedUrl, pts, center_lat, center_lon };
+}
+
+function renderGeoResults(results) {
+  document.getElementById('result-ph').classList.add('hidden');
+  updatePolylineOptVisibility(results.length);
+
+  const [lon0, lat0] = results[0];
+  const latF=lat0.toFixed(8), lonF=lon0.toFixed(8);
+  const isPolyline = results.length > 1 && polylineMode;
+
+  // Coordinate rows
+  let rowsHtml = '<div class="anim res-pt-wrap">';
+  results.forEach(([lon,lat], i) => { rowsHtml += ptRowGeoHTML(lat, lon, i); });
+  rowsHtml += '</div>';
+
+  let mapHtml = '';
+
+  if (results.length === 1) {
+    // Single point: marker embed
+    mapHtml = '<div class="map-wrap">'
+      + '<iframe width="100%" height="300" style="border:0;display:block;" allowfullscreen loading="lazy"'
+      + ' referrerpolicy="no-referrer-when-downgrade"'
+      + ' src="' + singleMarkerEmbed(lat0, lon0) + '"></iframe></div>'
+      + '<a class="map-open" href="https://www.google.com/maps?q=' + latF + ',' + lonF + '&t=k&z=18"'
+      + ' target="_blank" rel="noopener">&#x1F6F0;&#xFE0F; Mở rộng trên Google Maps (Vệ tinh)</a>';
+
+  } else if (isPolyline) {
+    // Multi-point polyline: draw on canvas over satellite tile
+    const pts = results.map(([lon,lat]) => [parseFloat(lat.toFixed(8)), parseFloat(lon.toFixed(8))]);
+    const ptsJson = JSON.stringify(pts);
+    mapHtml = '<div class="rnote" style="margin-bottom:8px">&#x1F4CD; Hiển thị đường nối <b>'
+      + results.length + ' điểm</b> (màu vàng) trên nền vệ tinh.</div>'
+      + '<div class="map-canvas-wrap"><div id="poly-canvas" style="height:320px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:12px">⏳ Đang tải bản đồ...</div></div>'
+      + '<a class="map-open" href="https://www.google.com/maps?q=' + latF + ',' + lonF + '&t=k&z=18"'
+      + ' target="_blank" rel="noopener">&#x1F6F0;&#xFE0F; Mở rộng Google Maps (Vệ tinh) · Điểm 1</a>';
+
+    // Draw after DOM update
+    setTimeout(() => drawPolylineCanvas(pts), 60);
+
+  } else {
+    // Multi-point, no polyline: show first point embed + note
+    mapHtml = '<div class="rnote" style="margin-bottom:8px">&#x1F4CD; Google Maps hiển thị <b>điểm 1</b> trong '
+      + results.length + ' điểm. Đánh dấu “Nối đường” để xem toàn bộ.</div>'
+      + '<div class="map-wrap"><iframe width="100%" height="300" style="border:0;display:block;" allowfullscreen loading="lazy"'
+      + ' referrerpolicy="no-referrer-when-downgrade"'
+      + ' src="' + singleMarkerEmbed(lat0, lon0) + '"></iframe></div>'
+      + '<a class="map-open" href="https://www.google.com/maps?q=' + latF + ',' + lonF + '&t=k&z=18"'
+      + ' target="_blank" rel="noopener">&#x1F6F0;&#xFE0F; Mở rộng Google Maps (Vệ tinh) · Điểm 1</a>';
+  }
+
+  const out = document.getElementById('result-out');
+  out.innerHTML = rowsHtml + mapHtml;
+  out.classList.remove('hidden');
+}
+
+// Draw polyline map using Leaflet + Esri World Imagery (free, no API key)
+let leafletMap = null; // keep reference to destroy/reinit
+
+function drawPolylineCanvas(pts) {
+  const wrap = document.getElementById('poly-canvas');
+  if (!wrap) return;
+
+  // Replace placeholder with Leaflet container
+  wrap.parentElement.innerHTML = '<div class="leaflet-map-wrap"><div id="polyline-map"></div></div>';
+
+  // Destroy previous map instance if exists
+  if (leafletMap) { try { leafletMap.remove(); } catch(e){} leafletMap = null; }
+
+  // Center on midpoint
+  const lats = pts.map(p=>p[0]), lons = pts.map(p=>p[1]);
+  const centerLat = (Math.min(...lats)+Math.max(...lats))/2;
+  const centerLon = (Math.min(...lons)+Math.max(...lons))/2;
+
+  // Init Leaflet map
+  leafletMap = L.map('polyline-map', { zoomControl:true, attributionControl:true });
+
+  // Esri World Imagery — free satellite tiles, no API key needed
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution:'Tiles © Esri', maxZoom:19 }
+  ).addTo(leafletMap);
+
+  // Draw yellow polyline
+  const latlngs = pts.map(p => [p[0], p[1]]);
+  L.polyline(latlngs, {
+    color: '#CC0000',
+    weight: 4,
+    opacity: 0.95,
+    lineJoin: 'round'
+  }).addTo(leafletMap);
+
+  // Markers removed — chỉ hiển thị đường nối
+
+  // Fit map to show all points with padding
+  leafletMap.fitBounds(L.latLngBounds(latlngs), { padding: [30,30] });
+}
+
+// ══════════════════════════════════════════════════════
+// AUTO-SYNC: HN-72 ↔ VN-2000 by province name
+// ══════════════════════════════════════════════════════
+
+// Khi HN-72 hoặc VN-2000 thay đổi tỉnh/thành, tự đồng bộ bên kia.
+// Vì 2 danh sách có cùng tên tỉnh/thành, chỉ cần khớp theo text trước dấu (.
+function syncZones(source) {
+  const [side, type] = source.split('-'); // side='left'/'right', type='hn'/'vn'
+  const otherSide = side === 'left' ? 'right' : 'left';
+  const thisSys  = side === 'left' ? leftSys  : rightSys;
+  const otherSys = side === 'left' ? rightSys : leftSys;
+
+  // Chỉ sync khi 2 bảng là HN-72 ↔ VN-2000
+  if (![thisSys, otherSys].sort().join('+') === 'hn72+vn2000') return;
+  if (thisSys === 'wgs84' || otherSys === 'wgs84') return;
+
+  const srcId = side + (type === 'hn' ? '-hn-zone' : '-vn-prov');
+  const dstId = otherSide + (thisSys === 'hn72' ? '-vn-prov' : '-hn-zone');
+  const srcSel = document.getElementById(srcId);
+  const dstSel = document.getElementById(dstId);
+  if (!srcSel || !dstSel) return;
+
+  // Lấy tên tỉnh từ option được chọn (phần trước dấu '(')
+  const srcText = srcSel.options[srcSel.selectedIndex].text;
+  const provName = srcText.split('(')[0].trim();
+
+  // Tìm tỉnh cùng tên trong dropdown đích
+  for (let i = 0; i < dstSel.options.length; i++) {
+    if (dstSel.options[i].text.split('(')[0].trim() === provName) {
+      dstSel.selectedIndex = i;
+      return;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+updateWrappers('left');
+updateWrappers('right');
+updateBadge('left', leftSys);
+updateBadge('right', rightSys);
+renderInputRows(); // init first row (no saved values)
+document.addEventListener('keydown', e => { if(e.key==='Enter') convert(); });
+</script>
+</body>
+</html>
