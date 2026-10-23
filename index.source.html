@@ -183,15 +183,13 @@ input.cinp::placeholder{color:var(--text3);font-weight:300;}
 .res-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .rnote-sm { font-size:10.5px; color:var(--text3); padding:3px 2px; }
 
-/* ── POLYLINE OPTION ── */
+/* ── CONNECT-MODE OPTION (line / polygon) ── */
 .polyline-opt { display:flex; align-items:center; gap:8px; padding:8px 12px;
   background:var(--surface2); border:1px solid var(--border); border-radius:8px;
-  margin-bottom:4px; cursor:pointer; user-select:none; }
-.polyline-opt input[type=checkbox] { width:15px; height:15px; accent-color:var(--gold);
-  cursor:pointer; flex-shrink:0; }
+  margin-bottom:4px; flex-wrap:wrap; }
 .polyline-opt label { font-size:12px; font-weight:500; color:var(--text2);
-  cursor:pointer; line-height:1.4; }
-.polyline-opt label span { color:var(--gold); font-weight:700; }
+  cursor:pointer; line-height:1.4; white-space:nowrap; }
+.polyline-opt select.psel { width:auto; flex:1; min-width:180px; }
 .map-canvas-wrap { border-radius:10px; overflow:hidden; border:1px solid var(--border);
   margin-bottom:10px; background:#e8eaed; }
 
@@ -572,8 +570,12 @@ input.cinp::placeholder{color:var(--text3);font-weight:300;}
 
       <!-- Polyline option: shown only when output is WGS-84 and multi-point -->
       <div class="polyline-opt hidden" id="polyline-opt-wrap">
-        <input type="checkbox" id="chk-polyline" onchange="polylineMode=this.checked;if(document.getElementById('result-out').innerHTML)convert();">
-        <label for="chk-polyline">Nối các điểm thành <span>đường thẳng</span> trên bản đồ</label>
+        <label for="connect-mode">Hiển thị trên bản đồ:</label>
+        <select class="psel" id="connect-mode" onchange="connectMode=this.value;if(document.getElementById('result-out').innerHTML)convert();">
+          <option value="none">Chỉ đánh dấu từng điểm</option>
+          <option value="line">Nối thành đường (polyline)</option>
+          <option value="polygon" id="opt-polygon">Khép thành vùng (polygon)</option>
+        </select>
       </div>
 
       <div class="result-area">
@@ -650,7 +652,12 @@ function hn72Proj(cm, muiDeg, full) {
 let leftSys  = 'vn2000';
 let rightSys = 'wgs84';
 const IS_PROJ = {hn72:true, vn2000:true, wgs84:false};
-let polylineMode = false; // trạng thái checkbox "Nối đường" — độc lập với DOM
+var connectMode = 'none'; // 'none' | 'line' | 'polygon' — var (not let): must leak to the true
+  // global scope so the inline onchange="connectMode=this.value" attribute on #connect-mode can
+  // mutate the same binding convert()/renderGeoResults() read. This matters once this script runs
+  // through eval() (as index.html's obfuscated bundle does): a top-level `let` there is scoped to
+  // eval's own lexical environment and invisible to inline attribute handlers, which always run in
+  // the real global scope — their assignment would silently create an unrelated global instead.
 const SYS_INFO = {
   hn72:   {dot:'dot-hn', desc:'HN-72 · Hà Nội 1972 · Gauss-Krüger Múi 3°/6° · Krassovsky'},
   vn2000: {dot:'dot-vn', desc:'VN-2000 · Hệ địa chính hiện hành · TM-3° · k=0.9999'},
@@ -835,7 +842,7 @@ function clearResult() {
   out.classList.add('hidden'); out.innerHTML='';
   document.getElementById('msg-err').classList.add('hidden');
   document.getElementById('msg-warn').classList.add('hidden');
-  // Ẩn checkbox nhưng GIỮ NGUYÊN polylineMode (không reset trạng thái check)
+  // Ẩn dropdown nhưng GIỮ NGUYÊN connectMode (không reset lựa chọn)
   const pw = document.getElementById('polyline-opt-wrap');
   if (pw) pw.classList.add('hidden');
 }
@@ -870,7 +877,7 @@ function refreshPanel(side, sys) {
 
 function swapSystems() {
   [leftSys, rightSys] = [rightSys, leftSys];
-  polylineMode = false; // reset khi đổi hệ
+  connectMode = 'none'; // reset khi đổi hệ
   refreshPanel('left', leftSys);  refreshPanel('right', rightSys);
   updateBadge('left', leftSys);   updateBadge('right', rightSys);
   updateWrappers('left');         updateWrappers('right');
@@ -1027,15 +1034,19 @@ function renderProjResults(results, sys, note) {
   out.innerHTML = html; out.classList.remove('hidden');
 }
 
-// Show/hide polyline checkbox based on result count
+// Show/hide connect-mode dropdown based on result count
 function updatePolylineOptVisibility(count) {
   const wrap = document.getElementById('polyline-opt-wrap');
   if (!wrap) return;
   const show = rightSys === 'wgs84' && count >= 2;
   wrap.classList.toggle('hidden', !show);
-  // Sync checkbox UI với global state
-  const chk = document.getElementById('chk-polyline');
-  if (chk) chk.checked = polylineMode;
+  // Polygon cần tối thiểu 3 điểm để khép vùng có diện tích
+  const polyOpt = document.getElementById('opt-polygon');
+  if (polyOpt) polyOpt.disabled = count < 3;
+  if (connectMode === 'polygon' && count < 3) connectMode = 'line';
+  // Sync dropdown UI với global state
+  const sel = document.getElementById('connect-mode');
+  if (sel) sel.value = connectMode;
 }
 
 // Build Google Maps Embed URL for single marker
@@ -1075,7 +1086,8 @@ function renderGeoResults(results) {
 
   const [lon0, lat0] = results[0];
   const latF=lat0.toFixed(8), lonF=lon0.toFixed(8);
-  const isPolyline = results.length > 1 && polylineMode;
+  const isShape = results.length > 1 && connectMode !== 'none';
+  const isPolygon = connectMode === 'polygon';
 
   // Coordinate rows
   let rowsHtml = '<div class="anim res-pt-wrap">';
@@ -1093,23 +1105,23 @@ function renderGeoResults(results) {
       + '<a class="map-open" href="https://www.google.com/maps?q=' + latF + ',' + lonF + '&t=k&z=18"'
       + ' target="_blank" rel="noopener">&#x1F6F0;&#xFE0F; Mở rộng trên Google Maps (Vệ tinh)</a>';
 
-  } else if (isPolyline) {
-    // Multi-point polyline: draw on canvas over satellite tile
+  } else if (isShape) {
+    // Multi-point line/polygon: draw on canvas over satellite tile
     const pts = results.map(([lon,lat]) => [parseFloat(lat.toFixed(8)), parseFloat(lon.toFixed(8))]);
-    const ptsJson = JSON.stringify(pts);
-    mapHtml = '<div class="rnote" style="margin-bottom:8px">&#x1F4CD; Hiển thị đường nối <b>'
-      + results.length + ' điểm</b> (màu vàng) trên nền vệ tinh.</div>'
+    const shapeLabel = isPolygon ? 'vùng khép kín (polygon, màu đỏ)' : 'đường nối (polyline, màu đỏ)';
+    mapHtml = '<div class="rnote" style="margin-bottom:8px">&#x1F4CD; Hiển thị ' + shapeLabel + ' giữa <b>'
+      + results.length + ' điểm</b> trên nền vệ tinh.</div>'
       + '<div class="map-canvas-wrap"><div id="poly-canvas" style="height:320px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:12px">⏳ Đang tải bản đồ...</div></div>'
       + '<a class="map-open" href="https://www.google.com/maps?q=' + latF + ',' + lonF + '&t=k&z=18"'
       + ' target="_blank" rel="noopener">&#x1F6F0;&#xFE0F; Mở rộng Google Maps (Vệ tinh) · Điểm 1</a>';
 
     // Draw after DOM update
-    setTimeout(() => drawPolylineCanvas(pts), 60);
+    setTimeout(() => drawPolylineCanvas(pts, isPolygon), 60);
 
   } else {
-    // Multi-point, no polyline: show first point embed + note
+    // Multi-point, no shape selected: show first point embed + note
     mapHtml = '<div class="rnote" style="margin-bottom:8px">&#x1F4CD; Google Maps hiển thị <b>điểm 1</b> trong '
-      + results.length + ' điểm. Đánh dấu “Nối đường” để xem toàn bộ.</div>'
+      + results.length + ' điểm. Chọn "Nối thành đường" hoặc "Khép thành vùng" ở trên để xem toàn bộ.</div>'
       + '<div class="map-wrap"><iframe width="100%" height="300" style="border:0;display:block;" allowfullscreen loading="lazy"'
       + ' referrerpolicy="no-referrer-when-downgrade"'
       + ' src="' + singleMarkerEmbed(lat0, lon0) + '"></iframe></div>'
@@ -1125,7 +1137,7 @@ function renderGeoResults(results) {
 // Draw polyline map using Leaflet + Esri World Imagery (free, no API key)
 let leafletMap = null; // keep reference to destroy/reinit
 
-function drawPolylineCanvas(pts) {
+function drawPolylineCanvas(pts, closed) {
   const wrap = document.getElementById('poly-canvas');
   if (!wrap) return;
 
@@ -1149,16 +1161,27 @@ function drawPolylineCanvas(pts) {
     { attribution:'Tiles © Esri', maxZoom:19 }
   ).addTo(leafletMap);
 
-  // Draw yellow polyline
+  // Draw polyline or closed polygon depending on mode
   const latlngs = pts.map(p => [p[0], p[1]]);
-  L.polyline(latlngs, {
-    color: '#CC0000',
-    weight: 4,
-    opacity: 0.95,
-    lineJoin: 'round'
-  }).addTo(leafletMap);
+  if (closed) {
+    L.polygon(latlngs, {
+      color: '#CC0000',
+      weight: 4,
+      opacity: 0.95,
+      fillColor: '#CC0000',
+      fillOpacity: 0.18,
+      lineJoin: 'round'
+    }).addTo(leafletMap);
+  } else {
+    L.polyline(latlngs, {
+      color: '#CC0000',
+      weight: 4,
+      opacity: 0.95,
+      lineJoin: 'round'
+    }).addTo(leafletMap);
+  }
 
-  // Markers removed — chỉ hiển thị đường nối
+  // Markers removed — chỉ hiển thị đường/vùng nối
 
   // Fit map to show all points with padding
   leafletMap.fitBounds(L.latLngBounds(latlngs), { padding: [30,30] });
